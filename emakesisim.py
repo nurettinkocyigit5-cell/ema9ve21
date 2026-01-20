@@ -6,12 +6,12 @@ import streamlit as st
 # Streamlit Ayarları
 # -------------------------------------------------
 st.set_page_config(
-    page_title="Multi-Exchange EMA Scanner",
+    page_title="Bitget EMA Scanner",
     layout="wide"
 )
 
 st.title("EMA(9) / EMA(21) Yukarı Kesişim Tarayıcı")
-st.caption("Gate.io • OKX • Bitget | Seçilebilir Timeframe")
+st.caption("Bitget | Seçilebilir Timeframe")
 
 # -------------------------------------------------
 # Timeframe Seçimi
@@ -26,36 +26,31 @@ TIMEFRAME_OPTIONS = {
 selected_label = st.selectbox(
     "Zaman Dilimi",
     list(TIMEFRAME_OPTIONS.keys()),
-    index=1  # Varsayılan: 1 Saat
+    index=1
 )
 
 TIMEFRAME = TIMEFRAME_OPTIONS[selected_label]
 LIMIT = 100
 
 # -------------------------------------------------
-# Borsalar
+# Bitget
 # -------------------------------------------------
-EXCHANGES = {
-    "Gate.io": ccxt.gateio({"enableRateLimit": True}),
-    "OKX": ccxt.okx({"enableRateLimit": True}),
-    "Bitget": ccxt.bitget({"enableRateLimit": True}),
-}
+exchange = ccxt.bitget({"enableRateLimit": True})
 
 # -------------------------------------------------
 # Fonksiyonlar
 # -------------------------------------------------
-def fetch_ohlcv(exchange, symbol):
+def fetch_ohlcv(symbol):
     try:
         data = exchange.fetch_ohlcv(
             symbol,
             timeframe=TIMEFRAME,
             limit=LIMIT
         )
-        df = pd.DataFrame(
+        return pd.DataFrame(
             data,
             columns=["ts", "open", "high", "low", "close", "volume"]
         )
-        return df
     except Exception:
         return None
 
@@ -75,26 +70,21 @@ def ema_crossover(df):
 # -------------------------------------------------
 results = []
 
-with st.spinner("Borsalar taranıyor..."):
-    for exchange_name, exchange in EXCHANGES.items():
-        try:
-            markets = exchange.load_markets()
-            symbols = [
-                s for s in markets
-                if s.endswith("/USDT") and markets[s]["active"]
-            ]
+with st.spinner("Bitget taranıyor..."):
+    markets = exchange.load_markets()
+    symbols = [
+        s for s in markets
+        if s.endswith("/USDT") and markets[s]["active"]
+    ]
 
-            for symbol in symbols:
-                df = fetch_ohlcv(exchange, symbol)
-                if df is not None and len(df) >= 21:
-                    if ema_crossover(df):
-                        results.append({
-                            "Borsa": exchange_name,
-                            "Coin": symbol,
-                            "Timeframe": TIMEFRAME
-                        })
-        except Exception:
-            st.error(f"{exchange_name} taranırken hata oluştu")
+    for symbol in symbols:
+        df = fetch_ohlcv(symbol)
+        if df is not None and len(df) >= 21:
+            if ema_crossover(df):
+                results.append({
+                    "Coin": symbol,
+                    "Timeframe": TIMEFRAME
+                })
 
 # -------------------------------------------------
 # Sonuçlar
@@ -104,7 +94,7 @@ st.subheader("Tespit Edilen Coinler")
 if results:
     df_result = pd.DataFrame(results)
     st.dataframe(
-        df_result.sort_values(["Borsa", "Coin"]),
+        df_result.sort_values("Coin"),
         use_container_width=True
     )
 else:
